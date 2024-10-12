@@ -1,16 +1,46 @@
-import "./Checkout.css"; // Ensure this matches the path and filename
+import "./Checkout.css";
 
-import QRCode from "react-qr-code"; // Import react-qr-code
-import React from "react";
+import React, { useState } from "react";
+
+import QRCode from "react-qr-code";
+import axios from "axios"; // For making API requests to your backend
+import { loadStripe } from "@stripe/stripe-js"; // Import Stripe
 import { useNavigate } from "react-router-dom";
+
+const stripePromise = loadStripe(
+  "pk_test_51Q8xL0AOza39iLxIcMsAL24Onny4PsAmKzG8IzOljeW2F4f0USQScTrSCaWi10oPcmkeuZ6wA9AbDLlw6IzwVmAq00MCv50p2k"
+); // Add your Stripe publishable key
 
 const Checkout = ({ selectedTables, totalCount, totalPrice, onConfirm }) => {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
 
-  const handleConfirm = () => {
-    // Confirmation logic here
-    onConfirm(); // Call the confirmation function
-    navigate("/"); // Redirect to home after confirmation
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      // Call your backend to create a payment session
+      const { data } = await axios.post(
+        "http://localhost:3000/create-checkout-session",
+        {
+          amount: totalPrice * 100, // Stripe requires amount in the smallest currency unit (like cents)
+        }
+      );
+
+      const stripe = await stripePromise;
+
+      // Redirect to Stripe Checkout
+      const result = await stripe.redirectToCheckout({
+        sessionId: data.id, // Use the sessionId from the backend response
+      });
+
+      if (result.error) {
+        console.error(result.error.message);
+      }
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const qrCodeValue = `Total Seats: ${totalCount}, Total Price: ${totalPrice} INR`;
@@ -45,15 +75,15 @@ const Checkout = ({ selectedTables, totalCount, totalPrice, onConfirm }) => {
       </ul>
 
       <div className="my-6 flex justify-center">
-        {/* Use react-qr-code here */}
         <QRCode value={qrCodeValue} size={128} />
       </div>
 
       <button
         className="w-full bg-green-600 text-white font-semibold py-3 rounded-lg hover:bg-green-700 transition duration-200"
         onClick={handleConfirm}
+        disabled={loading}
       >
-        Confirm Booking
+        {loading ? "Processing..." : "Confirm Booking"}
       </button>
 
       <button
